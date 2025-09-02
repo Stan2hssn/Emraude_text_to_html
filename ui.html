@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Extract Text to HTML</title>
+    <!-- in the HEAD of the page you open in a new window -->
+    <link rel="icon" href="/favicon-32.png" sizes="32x32">
+    <link rel="icon" href="/favicon-16.png" sizes="16x16">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:ital,wght@0,100..900;1,100..900&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #171717;
+            --ink: #F6F6F6;
+            --muted: #B7B9BD;
+            --panel: #EBEDEC;
+            /* pill background */
+            --surface: #1C1D1F;
+
+            /* card surface */
+            --accent: #1A1A1A;
+            /* active tab + buttons */
+            --brand: #23A083;
+            /* “BY EMRAUDE” green */
+            --gradient: linear-gradient(97deg, #1B1B1B 21.73%, #373737 77.68%);
+            --gradient-light: linear-gradient(97deg, #F6F6F6 21.73%, #EBEDEC 77.68%);
+            --divider: #2A2B2D;
+            --padding: 16px 16px;
+            --radius: 6px;
+            --radius-lg: 12px;
+            --shadow: 0 4px 14px rgba(0, 0, 0, .06);
+            --shadow-soft: 0 1px 2px rgba(0, 0, 0, .06);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #F6F6F6;
+                --ink: #1A1A1A;
+                --muted: #8C8F93;
+                --panel: #222325;
+                --surface: #F8F9FA;
+                --divider: #E6E7E9;
+                --accent: #0F0F10;
+                --brand: #23A083;
+                --shadow: 0 6px 18px rgba(0, 0, 0, .35);
+                --shadow-soft: 0 1px 2px rgba(0, 0, 0, .35);
+            }
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font-family: "Azeret Mono", monospace;
+            letter-spacing: .2px;
+        }
+
+        .wrap {
+            padding: 20px 16px 96px;
+            max-width: 620px;
+            margin: 0 auto;
+            position: relative
+        }
+
+        /* Header */
+        .topbar {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .title {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .title h1 {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.05;
+            font-weight: 500;
+            letter-spacing: .02em;
+            text-transform: uppercase;
+        }
+
+        .brand {
+            font-size: 11px;
+            letter-spacing: .14em;
+            font-weight: 500;
+            text-transform: uppercase;
+            color: var(--brand);
+        }
+
+        .gh {
+            opacity: .2;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 9999px;
+            transition: opacity .2s ease-in-out;
+        }
+
+        .gh:hover {
+            opacity: .85;
+        }
+
+        /* Segmented (tabs) */
+        .segmented {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            color: var(--panel);
+            border-radius: var(--radius);
+            border: 2px solid #EBEDEC;
+            margin: 10px 0 18px;
+        }
+
+        .seg-btn {
+            border: 0;
+            color: #2E2E2E;
+            padding: 12px 14px;
+            border-radius: calc(var(--radius) - 2px);
+            font-size: 11px;
+            letter-spacing: .08em;
+            cursor: pointer;
+        }
+
+        .seg-btn[aria-selected="true"] {
+            background: var(--gradient);
+
+            color: #fff;
+        }
+
+        /* Hint */
+        .hint {
+            color: var(--muted);
+            margin: 10px 2px 6px;
+        }
+
+        .card-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding-bottom: 24px;
+            border-bottom: 1.5px solid var(--divider);
+        }
+
+        .card-wrapper:last-child {
+            border-bottom: none;
+        }
+
+        /* Card list */
+        .cards {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            margin: 10px 0 22px;
+        }
+
+        .label {
+            margin: 0 2px 10px;
+            font-size: 12px;
+            letter-spacing: .12em;
+            color: var(--ink);
+            text-transform: uppercase;
+        }
+
+        .card {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: end;
+            background: var(--surface);
+            border: 2px solid #F2F2F2;
+            background: #FDFDFD;
+            box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.00), 0 4px 3px 0 rgba(0, 0, 0, 0.00);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            position: relative;
+
+            transition: box-shadow .15s ease-in-out, color .15s ease-in-out;
+
+            textarea {
+                color: var(--muted);
+            }
+        }
+
+        .card:hover {
+            box-shadow: 0 1px 0px 0 rgba(0, 0, 0, 0.05), 0 1px 0px 0 rgba(0, 0, 0, 0.1);
+
+            textarea {
+                color: var(--ink);
+            }
+
+            .icon-btn svg path {
+                stroke: var(--muted);
+            }
+        }
+
+        .icon-btn {
+            border: none;
+            background: transparent;
+            color: var(--ink);
+            padding: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-btn svg {
+            width: 16px;
+            height: 16px;
+            display: block;
+        }
+
+        .icon-btn svg path {
+            transition: stroke .2s ease-in-out;
+        }
+
+        .icon-btn:hover svg path {
+            stroke: #ABABAB;
+        }
+
+        .copied svg path {
+            stroke: var(--brand) !important;
+        }
+
+        .textarea-wrapper {
+            width: 100%;
+            height: auto;
+
+            padding: 14px 14px 16px;
+
+        }
+
+        textarea {
+            width: 100%;
+            height: fit-content;
+            border: 0;
+            outline: none;
+            resize: vertical;
+            font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            color: var(--ink);
+            background: transparent;
+        }
+
+        /* Bottom action bar */
+        .action-bar {
+            position: fixed;
+            display: flex;
+            width: 100%;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg);
+            padding: var(--padding);
+            box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);
+            border-top: 1.5px solid var(--divider);
+        }
+
+        .action-inner {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            border-radius: var(--radius);
+            transition: box-shadow .4s ease-in-out;
+            cursor: pointer;
+        }
+
+        .extract-svg {
+            position: absolute;
+            top: 50%;
+            left: 16px;
+            transform-origin: left center;
+            transform: translate(0%, -50%) scale(.75);
+            z-index: 1;
+        }
+
+        .cta {
+            position: relative;
+            padding: var(--padding);
+
+            width: 100%;
+            font-size: 14px;
+            color: var(--bg);
+
+            cursor: pointer;
+
+            border: none;
+            border-radius: var(--radius);
+            background: var(--gradient);
+        }
+
+        .action-inner:hover {
+            box-shadow: 0 9px 18px 0 rgba(0, 0, 0, 0.48);
+        }
+
+        /* Existing shared utilities (kept for Options panel) */
+        .row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap
+        }
+
+        .group {
+            display: flex;
+            flex-direction: column;
+            margin: 12px 0;
+            border-bottom: 1.5px solid var(--divider);
+        }
+
+        .group:last-child {
+            border-bottom: none;
+        }
+
+        .group-title {
+            margin: 8px 0 6px;
+            font-size: 12px;
+            letter-spacing: .12em;
+            opacity: .7
+        }
+
+        h3 {
+            margin: 0 0 6px;
+            font-size: 11px;
+            font-weight: 400;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+
+        .options {
+            display: flex;
+            flex-direction: column;
+            gap: 6px 20px;
+            margin: 8px 0;
+        }
+
+        .options-wrapper {
+            padding: 12px 0px;
+            border-bottom: 1.5px solid var(--divider);
+        }
+
+        .options-wrapper:last-child {
+            border-bottom: none;
+        }
+
+        .options label {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            font-weight: 400;
+            font-size: 12px;
+            width: 100%;
+        }
+
+        .options .bold {
+            font-weight: 400
+        }
+
+        .wrapper {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+        }
+
+        .cta.ghost {
+            background: transparent;
+            color: var(--ink);
+            border: 1px solid var(--divider)
+        }
+
+        input {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            border: 1.5px solid var(--divider);
+            border-radius: var(--radius);
+            padding: 5px 5px;
+            font-size: 14px;
+            color: var(--ink);
+            background: var(--bg);
+            transform: translateY(20%);
+        }
+
+        input:checked:before {
+            position: absolute;
+            content: '';
+            width: 100%;
+            height: 100%;
+            inset: 0;
+            border-radius: 50%;
+            scale: .6;
+            background: var(--ink);
+        }
+
+        input:checked {
+            outline: none;
+            color: var(--ink);
+            border-color: var(--ink);
+        }
+
+        .cta.wide {
+            width: 100%
+        }
+
+        .pill {
+            position: relative;
+            padding: var(--padding);
+
+            width: 100%;
+            font-size: 14px;
+            color: var(--bg);
+
+            cursor: pointer;
+
+            border-radius: var(--radius);
+            background-color: var(--bg);
+            transition: background-color .2s ease;
+        }
+
+        .pill:hover {
+            box-shadow: var(--shadow-soft);
+            background-color: var(--ink);
+            color: var(--bg);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .pill {
+                background-color: var(--bg);
+                border: 1.5px solid var(--ink);
+
+                color: var(--ink)
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <!-- Header -->
+        <div class="topbar">
+            <div class="title">
+                <h1>EXTRACT TEXT TO HTML</h1>
+                <div class="brand">BY EMRAUDE</div>
+            </div>
+            <button class="gh" title="GitHub">
+                <!-- simple GH mark -->
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path
+                        d="M12 .5a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.55-1.41-1.34-1.79-1.34-1.79-1.09-.74.08-.73.08-.73 1.21.08 1.85 1.25 1.85 1.25 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.66-.3-5.47-1.34-5.47-5.97 0-1.32.47-2.4 1.24-3.24-.12-.3-.54-1.52.12-3.17 0 0 1-.32 3.3 1.24a11.5 11.5 0 0 1 6 0c2.3-1.56 3.3-1.24 3.3-1.24.66 1.65.24 2.87.12 3.17.77.84 1.24 1.92 1.24 3.24 0 4.64-2.81 5.66-5.49 5.96.43.37.81 1.09.81 2.2v3.26c0 .32.22.7.82.58A12 12 0 0 0 12 .5Z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Segmented control -->
+        <div class="segmented" role="tablist" aria-label="Modes">
+            <button id="tab-text" class="seg-btn" role="tab" aria-selected="true">EXTRACTOR</button>
+            <button id="tab-shape" class="seg-btn" role="tab" aria-selected="false">OPTIONS</button>
+        </div>
+
+        <!-- TEXT tab -->
+        <section class="tabpanel" id="panel-text" role="tabpanel" aria-labelledby="tab-text">
+            <!-- <p class="hint">Works on your current selection. One field per TEXT layer (top→down, left→right).</p> -->
+            <div id="list" class="cards"></div>
+        </section>
+
+        <!-- OPTIONS tab (unchanged content) -->
+        <section class="tabpanel" id="panel-shape" role="tabpanel" aria-labelledby="tab-shape" hidden>
+            <div class="groups">
+                <div class="group">
+                    <h2 class="group-title">Output</h2>
+                    <div class="options">
+                        <div class="options-wrapper">
+                            <h3>Font Weight</h3>
+
+                            <div class="wrapper">
+                                <label><input type="radio" name="bold" value="span" checked />
+                                    <p>span.bold</p>
+                                </label>
+                                <label><input type="radio" name="bold" value="strong" />
+                                    <p>strong</p>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="options-wrapper">
+                            <h3>Paragraphs</h3>
+                            <div class="wrapper">
+                                <label><input type="radio" name="paras" value="br" checked />
+                                    <p>br</p>
+                                </label>
+                                <label><input type="radio" name="paras" value="p" />
+                                    <p>p</p>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="options-wrapper">
+                            <h3>Paragraphs</h3>
+                            <div class="wrapper">
+                                <label><input type="radio" name="links" value="newtab" checked />
+                                    <p>Links target=_blank</p>
+                                </label>
+                                <label><input type="radio" name="links" value="same" />
+                                    <p>Links same tab</p>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="group">
+                    <h2 class="group-title">Lists</h2>
+                    <div class="options">
+                        <label><input type="radio" name="lists" value="figma" checked /> Use Figma list styles</label>
+                        <label><input type="radio" name="lists" value="regex" /> Fallback: dash / numbered</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row" style="margin-top:12px">
+                <button id="apply" class="pill">APPLY</button>
+            </div>
+        </section>
+    </div>
+
+    <!-- Bottom action bar -->
+    <div class="action-bar">
+        <div class="action-inner">
+            <svg class="extract-svg" width="26" height="16" viewBox="0 0 40 24" fill="none"
+                xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 22H16M26 20H38M2 12H24M2 2H24" stroke="#F1F1F1" stroke-width="3" stroke-linecap="round"
+                    stroke-linejoin="round" />
+            </svg>
+
+            <button id="extract" class="cta" type="button">EXTRACT</button>
+        </div>
+    </div>
+    <script>
+        // Tabs
+        const tabText = document.getElementById('tab-text')
+        const tabShape = document.getElementById('tab-shape')
+        const panelText = document.getElementById('panel-text')
+        const panelShape = document.getElementById('panel-shape')
+
+        function selectTab(which) {
+            const isText = which === 'text'
+            tabText.setAttribute('aria-selected', String(isText))
+            tabShape.setAttribute('aria-selected', String(!isText))
+            panelText.hidden = !isText
+            panelShape.hidden = isText
+        }
+        tabText.onclick = () => selectTab('text')
+        tabShape.onclick = () => selectTab('shape')
+
+        // Read options from the Options tab
+        function getOptions() {
+            const val = (name, def) => (document.querySelector(`input[name="${name}"]:checked`)?.value || def)
+            return {
+                bold: val('bold', 'span'),   // 'span' | 'strong'
+                paras: val('paras', 'br'),     // 'br'   | 'p'
+                links: val('links', 'newtab'), // 'newtab' | 'same'
+                lists: val('lists', 'figma'),  // 'figma'  | 'regex'
+            }
+        }
+
+        // List root
+        const list = document.getElementById('list')
+
+        // Copy helper
+        function copyToClipboard(text, btn) {
+            if (btn) { btn.classList.add('copied'); setTimeout(() => (btn.classList.remove('copied')), 900) }
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text)
+            } else {
+                const ta = document.createElement('textarea')
+                ta.value = text
+                ta.style.position = 'fixed'
+                ta.style.opacity = '0'
+                document.body.appendChild(ta)
+                ta.select()
+                document.execCommand('copy')
+                document.body.removeChild(ta)
+            }
+        }
+
+        // --- RENDERERS ---
+
+        function renderGroups(groups, error) {
+            list.innerHTML = ''
+            if (error) {
+                const p = document.createElement('p')
+                p.className = 'hint'
+                p.textContent = error
+                list.appendChild(p)
+                return
+            }
+
+            if (!groups || !groups.length) {
+                const p = document.createElement('p')
+                p.className = 'hint'
+                p.textContent = 'No TEXT found in selection.'
+                list.appendChild(p)
+                return
+            }
+
+            groups.forEach(group => {
+                // One card-wrapper per font group
+                const wrapper = document.createElement('div')
+                wrapper.className = 'card-wrapper'
+
+                // Single group label (font name). No per-card labels.
+                const gLabel = document.createElement('div')
+                gLabel.className = 'label'
+                gLabel.textContent = `${group.fontFamily}${group.isVariable ? ' (Variable)' : ''}`
+                wrapper.appendChild(gLabel);
+
+                // Each text becomes a card (no label)
+                (group.items || []).forEach(item => {
+                    const card = document.createElement('div')
+                    card.className = 'card'
+
+                    const copyBtn = document.createElement('button')
+                    copyBtn.className = 'icon-btn'
+                    copyBtn.title = 'Copy HTML'
+                    copyBtn.innerHTML = `
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8.99991 9V5.26693C8.99991 3.77345 8.99991 3.02616 9.29055 2.45573C9.54621 1.95396 9.95386 1.54631 10.4556 1.29065C11.026 1 11.7733 1 13.2668 1H20.7334C22.2268 1 22.9732 1 23.5436 1.29065C24.0453 1.54631 24.4537 1.95396 24.7094 2.45573C25 3.02616 25 3.7729 25 5.26637V12.7331C25 14.2265 25 14.9733 24.7094 15.5437C24.4537 16.0455 24.0449 16.454 23.5432 16.7096C22.9733 17 22.2278 17 20.7372 17H16.9998M8.99991 9H5.26688C3.77342 9 3.02614 9 2.45571 9.29065C1.95395 9.54631 1.54631 9.95396 1.29065 10.4557C1 11.0262 1 11.7735 1 13.2669V20.7336C1 22.2271 1 22.9734 1.29065 23.5438C1.54631 24.0456 1.95395 24.454 2.45571 24.7096C3.02558 25 3.77196 25 5.26249 25H12.7379C14.2285 25 14.9738 25 15.5437 24.7096C16.0454 24.454 16.4538 24.0452 16.7094 23.5435C16.9998 22.9736 16.9998 22.228 16.9998 20.7375V17M8.99991 9H12.7335C14.2269 9 14.9732 9 15.5437 9.29065C16.0454 9.54631 16.4538 9.95396 16.7094 10.4557C16.9998 11.0256 16.9998 11.772 16.9998 13.2626L16.9998 17" stroke="#E4E4E4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        `
+
+                    const taWrapper = document.createElement('div')
+                    taWrapper.className = 'textarea-wrapper'
+
+                    const ta = document.createElement('textarea')
+                    ta.value = String(item.html || '')
+
+                    copyBtn.onclick = () => copyToClipboard(ta.value, copyBtn)
+
+                    taWrapper.appendChild(ta)
+                    card.append(taWrapper, copyBtn)
+
+                    wrapper.appendChild(card)
+                })
+
+                list.appendChild(wrapper)
+            })
+        }
+
+        // Fallback if only flat items come back
+        function renderFlatAsSingleGroup(items, error) {
+            list.innerHTML = ''
+            if (error) {
+                const p = document.createElement('p')
+                p.className = 'hint'
+                p.textContent = error
+                list.appendChild(p)
+                return
+            }
+
+            const wrapper = document.createElement('div')
+            wrapper.className = 'card-wrapper'
+
+            const gLabel = document.createElement('div')
+            gLabel.className = 'label'
+            gLabel.textContent = 'Texts'
+            wrapper.appendChild(gLabel)
+
+            items.forEach(value => {
+                const card = document.createElement('div')
+                card.className = 'card'
+
+                const copyBtn = document.createElement('button')
+                copyBtn.className = 'icon-btn'
+                copyBtn.title = 'Copy HTML'
+                copyBtn.innerHTML = `
+        <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8.99991 9V5.26693C8.99991 3.77345 8.99991 3.02616 9.29055 2.45573C9.54621 1.95396 9.95386 1.54631 10.4556 1.29065C11.026 1 11.7733 1 13.2668 1H20.7334C22.2268 1 22.9732 1 23.5436 1.29065C24.0453 1.54631 24.4537 1.95396 24.7094 2.45573C25 3.02616 25 3.7729 25 5.26637V12.7331C25 14.2265 25 14.9733 24.7094 15.5437C24.4537 16.0455 24.0449 16.454 23.5432 16.7096C22.9733 17 22.2278 17 20.7372 17H16.9998M8.99991 9H5.26688C3.77342 9 3.02614 9 2.45571 9.29065C1.95395 9.54631 1.54631 9.95396 1.29065 10.4557C1 11.0262 1 11.7735 1 13.2669V20.7336C1 22.2271 1 22.9734 1.29065 23.5438C1.54631 24.0456 1.95395 24.454 2.45571 24.7096C3.02558 25 3.77196 25 5.26249 25H12.7379C14.2285 25 14.9738 25 15.5437 24.7096C16.0454 24.454 16.4538 24.0452 16.7094 23.5435C16.9998 22.9736 16.9998 22.228 16.9998 20.7375V17M8.99991 9H12.7335C14.2269 9 14.9732 9 15.5437 9.29065C16.0454 9.54631 16.4538 9.95396 16.7094 10.4557C16.9998 11.0256 16.9998 11.772 16.9998 13.2626L16.9998 17" stroke="#E4E4E4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `
+
+                const taWrapper = document.createElement('div')
+                taWrapper.className = 'textarea-wrapper'
+
+                const ta = document.createElement('textarea')
+                ta.value = String(value || '')
+
+                copyBtn.onclick = () => copyToClipboard(ta.value, copyBtn)
+
+                taWrapper.appendChild(ta)
+                card.append(taWrapper, copyBtn)
+
+                wrapper.appendChild(card)
+            })
+
+            if (!items.length) {
+                const p = document.createElement('p')
+                p.className = 'hint'
+                p.textContent = 'No TEXT found in selection.'
+                wrapper.appendChild(p)
+            }
+
+            list.appendChild(wrapper)
+        }
+
+        // Buttons -> send options
+        document.getElementById('extract').onclick = () => {
+            parent.postMessage({ pluginMessage: { type: 'extract', options: getOptions() } }, '*')
+        }
+        document.getElementById('apply').onclick = () => {
+            parent.postMessage({ pluginMessage: { type: 'extract', options: getOptions() } }, '*')
+            selectTab('text')
+        }
+
+        // Receive results from worker
+        onmessage = (e) => {
+            const msg = e.data.pluginMessage || {}
+            const { type, items, groups, error } = msg
+            if (type !== 'result') return
+
+            if (groups && groups.length) {
+                renderGroups(groups, error || null)
+                selectTab('text')
+            } else if (items) {
+                renderFlatAsSingleGroup(items, error || null)
+                selectTab('text')
+            } else {
+                renderGroups([], error || null)
+            }
+        };
+    </script>
+
+
+</body>
+
+</html>
