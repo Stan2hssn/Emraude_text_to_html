@@ -592,8 +592,6 @@
             const paras = Array.from(document.querySelectorAll('input[name="paras"]:checked'))
                 .map(i => i.value)
 
-            console.log('paras:', paras)
-
             return {
                 bold: val('bold', 'span'),
                 em: !!(document.querySelector('input[name="em"]:checked')),
