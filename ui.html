@@ -498,21 +498,33 @@
                                 <label><input type="radio" name="bold" value="strong" />
                                     <p>strong</p>
                                 </label>
+                                <label><input type="radio" name="bold" value="none" />
+                                    <p>none</p>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="options-wrapper">
+                            <h3>Font Style</h3>
+
+                            <div class="wrapper">
+                                <label><input type="checkbox" name="em" value="em" />
+                                    <p>em</p>
+                                </label>
                             </div>
                         </div>
                         <div class="options-wrapper">
                             <h3>Paragraphs</h3>
                             <div class="wrapper">
-                                <label><input type="radio" name="paras" value="br" checked />
+                                <label><input type="checkbox" name="paras" value="br" checked />
                                     <p>br</p>
                                 </label>
-                                <label><input type="radio" name="paras" value="p" />
+                                <label><input type="checkbox" name="paras" value="p" />
                                     <p>p</p>
                                 </label>
                             </div>
                         </div>
                         <div class="options-wrapper">
-                            <h3>Paragraphs</h3>
+                            <h3>Links</h3>
                             <div class="wrapper">
                                 <label><input type="radio" name="links" value="newtab" checked />
                                     <p>Links target=_blank</p>
@@ -558,6 +570,7 @@
         const tabShape = document.getElementById('tab-shape')
         const panelText = document.getElementById('panel-text')
         const panelShape = document.getElementById('panel-shape')
+        const extractBtn = document.getElementById('extract')
 
         function selectTab(which) {
             const isText = which === 'text'
@@ -569,25 +582,37 @@
         tabText.onclick = () => selectTab('text')
         tabShape.onclick = () => selectTab('shape')
 
-        // Read options from the Options tab
+        // Options
+        // Replace your getOptions() with this:
         function getOptions() {
-            const val = (name, def) => (document.querySelector(`input[name="${name}"]:checked`)?.value || def)
+            const val = (name, def) =>
+                (document.querySelector(`input[name="${name}"]:checked`)?.value || def)
+
+            // NEW: read both checkboxes under name="paras"
+            const paras = Array.from(document.querySelectorAll('input[name="paras"]:checked'))
+                .map(i => i.value)
+
+            console.log('paras:', paras)
+
             return {
-                bold: val('bold', 'span'),   // 'span' | 'strong'
-                paras: val('paras', 'br'),     // 'br'   | 'p'
-                links: val('links', 'newtab'), // 'newtab' | 'same'
-                lists: val('lists', 'figma'),  // 'figma'  | 'regex'
+                bold: val('bold', 'span'),
+                em: !!(document.querySelector('input[name="em"]:checked')),
+                p: paras.includes('p'),
+                br: paras.includes('br'),
+                links: val('links', 'newtab'),
+                lists: val('lists', 'figma'),
             }
         }
 
-        // List root
+
+        // Root
         const list = document.getElementById('list')
 
         // Copy helper
         function copyToClipboard(text, btn) {
-            if (btn) { btn.classList.add('copied'); setTimeout(() => (btn.classList.remove('copied')), 900) }
+            if (btn) { btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 900) }
             if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text)
+                return navigator.clipboard.writeText(text)
             } else {
                 const ta = document.createElement('textarea')
                 ta.value = text
@@ -597,11 +622,16 @@
                 ta.select()
                 document.execCommand('copy')
                 document.body.removeChild(ta)
+                return Promise.resolve()
             }
         }
 
-        // --- RENDERERS ---
+        // Small helpers to toggle CTA label
+        function setExtractLabel(copyMode) {
+            extractBtn.textContent = copyMode ? 'EXTRACT & COPY' : 'EXTRACT'
+        }
 
+        // -------- Renderers --------
         function renderGroups(groups, error) {
             list.innerHTML = ''
             if (error) {
@@ -611,7 +641,6 @@
                 list.appendChild(p)
                 return
             }
-
             if (!groups || !groups.length) {
                 const p = document.createElement('p')
                 p.className = 'hint'
@@ -621,17 +650,14 @@
             }
 
             groups.forEach(group => {
-                // One card-wrapper per font group
                 const wrapper = document.createElement('div')
                 wrapper.className = 'card-wrapper'
 
-                // Single group label (font name). No per-card labels.
                 const gLabel = document.createElement('div')
                 gLabel.className = 'label'
                 gLabel.textContent = `${group.fontFamily}${group.isVariable ? ' (Variable)' : ''}`
                 wrapper.appendChild(gLabel);
 
-                // Each text becomes a card (no label)
                 (group.items || []).forEach(item => {
                     const card = document.createElement('div')
                     card.className = 'card'
@@ -663,7 +689,6 @@
             })
         }
 
-        // Fallback if only flat items come back
         function renderFlatAsSingleGroup(items, error) {
             list.innerHTML = ''
             if (error) {
@@ -720,7 +745,7 @@
         }
 
         // Buttons -> send options
-        document.getElementById('extract').onclick = () => {
+        extractBtn.onclick = () => {
             parent.postMessage({ pluginMessage: { type: 'extract', options: getOptions() } }, '*')
         }
         document.getElementById('apply').onclick = () => {
@@ -728,22 +753,56 @@
             selectTab('text')
         }
 
-        // Receive results from worker
+        // -------- Handle results --------
         onmessage = (e) => {
             const msg = e.data.pluginMessage || {}
-            const { type, items, groups, error } = msg
+            const { type } = msg
+
+            // ---- NEW: react to selection changes
+            if (type === 'selection') {
+                const { selectedTextCount } = msg
+                setExtractLabel(selectedTextCount === 1) // 1 text selected => "EXTRACT & COPY"
+                return // no further rendering for selection updates
+            }
+
+            // existing result handling...
+            const { items, groups, error } = msg
             if (type !== 'result') return
 
             if (groups && groups.length) {
                 renderGroups(groups, error || null)
                 selectTab('text')
-            } else if (items) {
+            } else if (Array.isArray(items)) {
                 renderFlatAsSingleGroup(items, error || null)
                 selectTab('text')
             } else {
                 renderGroups([], error || null)
             }
+
+            // Count how many text blocks we actually have
+            const flatCount = Array.isArray(items) ? items.length : 0
+            const groupedCount = Array.isArray(groups)
+                ? groups.reduce((acc, g) => acc + (Array.isArray(g.items) ? g.items.length : 0), 0)
+                : 0
+            const total = groupedCount || flatCount
+
+            // If exactly one, copy it and update CTA label
+            if (total === 1) {
+                // Get the single html string
+                const single =
+                    (groupedCount === 1)
+                        ? (groups.find(g => g.items && g.items.length)?.items[0]?.html || '')
+                        : (items && items[0]) || ''
+
+                if (single) {
+                    copyToClipboard(String(single)).catch(() => { })
+                }
+                setExtractLabel(true)
+            } else {
+                setExtractLabel(false)
+            }
         };
+
     </script>
 
 

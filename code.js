@@ -43,13 +43,47 @@ const escapeHTML = (s) =>
 
 // Normalize options from UI
 function normalizeOptions(o) {
-  const out = {
-    bold: (o && (o.bold === 'strong' || o.bold === 'span')) ? o.bold : 'span',
-    paras: (o && (o.paras === 'p' || o.paras === 'br')) ? o.paras : 'br',
+  return {
+    bold: (o && (o.bold === 'strong' || o.bold === 'span' || o.bold === "none")) ? o.bold : 'span',
+    em: !!(o && (o.em === true || o.em === 'em')),
+    p: !!(o && (o.p === true || o.p === 'p')),
+    br: !!(o && (o.br === true || o.br === 'br')),
     links: (o && (o.links === 'same' || o.links === 'newtab')) ? o.links : 'newtab',
     lists: (o && (o.lists === 'regex' || o.lists === 'figma')) ? o.lists : 'figma',
   }
-  return out
+}
+
+
+
+function ensureSpaced(inner, wrapper) {
+  let result = wrapper(inner)
+  if (!/^\s/.test(inner)) result = " " + result
+  if (!/\s$/.test(inner)) result = result + " "
+  return result
+}
+
+function wrapWithTagsPreservingSpaces(text, openTag, closeTag) {
+  const leading = (text.match(/^\s*/) || [""])[0]
+  const trailing = (text.match(/\s*$/) || [""])[0]
+  const core = text.trim()
+  if (!core) return text // texte vide ou seulement espace: on ne wrap pas
+  return `${leading}${openTag}${core}${closeTag}${trailing}`
+}
+
+function wrapEm(text) {
+  return wrapWithTagsPreservingSpaces(text, "<em>", "</em>")
+}
+function wrapStrong(text) {
+  return wrapWithTagsPreservingSpaces(text, "<strong>", "</strong>")
+}
+function wrapBoldSpan(text) {
+  return wrapWithTagsPreservingSpaces(text, `<span class=\\"bold\\">`, `</span>`)
+}
+function wrapLink(text, href, newTab) {
+  const open = newTab
+    ? `<a href="${href}" target="_blank" rel="noopener">`
+    : `<a href="${href}">`
+  return wrapWithTagsPreservingSpaces(text, open, "</a>")
 }
 
 // =====================
@@ -89,23 +123,22 @@ function textNodeToHTML(node, opts) {
       const txt = raw.slice(s, e)
       let chunk = escapeHTML(txt)
 
-      const isBold = (Number(seg.fontWeight) || 400) >= 600
+      const isBold = (Number(seg.fontWeight) || 400) >= 600 && opts.bold !== 'none'
       const styleName = seg.fontName && seg.fontName.style ? String(seg.fontName.style) : ""
-      const isItalic = /italic|oblique/i.test(styleName)
+      const isItalic = opts.em && /italic/i.test(styleName)
       const href = seg.hyperlink && seg.hyperlink.type === "URL" ? seg.hyperlink.value : null
 
-      if (isItalic) chunk = `<em>${chunk}</em>`
-      if (isBold) chunk = (opts.bold === 'strong')
-        ? `<strong>${chunk}</strong>`
-        : `<span class="bold">${chunk}</span>`
 
-      if (href) {
-        const escHref = escapeHTML(href)
-        chunk = (opts.links === 'newtab')
-          ? `<a href="${escHref}" target="_blank" rel="noopener">${chunk}</a>`
-          : `<a href="${escHref}">${chunk}</a>`
+      if (isItalic) {
+        chunk = wrapEm(chunk)
       }
-
+      if (isBold) {
+        chunk = (opts && opts.bold === 'strong') ? wrapStrong(chunk) : wrapBoldSpan(chunk)
+      }
+      if (href) {
+        const newTab = !opts || opts.links !== 'same' // newtab par défaut
+        chunk = wrapLink(chunk, escapeHTML(href), newTab)
+      }
       out += chunk
     }
     return out.replace(/\u2028/g, "<br>") // handle U+2028 line-separator
@@ -122,11 +155,18 @@ function textNodeToHTML(node, opts) {
   }
 
   const flushParagraph = () => {
+    let inBrBlock = false
+
     if (!paragraphBuffer.length) return
-    if (opts.paras === 'p') {
+    if (opts.p) {
+      // When p=true, join lines with <br> INSIDE the <p>
       html += `<p>${paragraphBuffer.join("<br>")}</p>`
+    } else if (opts.br) {
+      if (inBrBlock) html += "<br>"
+      html += rendered
+      inBrBlock = true
     } else {
-      html += (html && !html.endsWith("\n") && html !== "" ? "<br>" : "") + paragraphBuffer.join("<br>")
+      html += rendered
     }
     paragraphBuffer = []
   }
@@ -135,8 +175,8 @@ function textNodeToHTML(node, opts) {
     const paraText = raw.slice(ps, pe)
     const isBlank = paraText.trim() === ""
 
-    // Determine listType per options
     let listType = null // "ul" | "ol" | null
+
     if (opts.lists === 'figma') {
       // Prefer Figma listOptions if present
       for (const seg of segments) {
@@ -160,12 +200,18 @@ function textNodeToHTML(node, opts) {
       }
     }
 
+
+
     if (isBlank) {
-      // blank line ends any paragraph block and any list
+      // blank line ends any paragraph and any list
       flushParagraph()
       closeListIfAny()
+
+      // If we're in "br-only" mode, represent the blank paragraph with an extra <br>
+      if (!opts.p && opts.br) html += "<br>"
       continue
     }
+
 
     // Compute range start (strip marker if regex matched)
     let rangeStart = ps
@@ -176,8 +222,9 @@ function textNodeToHTML(node, opts) {
 
     const rendered = renderInlineRange(rangeStart, pe)
 
+
+    // Determine listType per options
     if (listType) {
-      // entering a list: close any paragraph buffer
       flushParagraph()
       if (openList !== listType) {
         closeListIfAny()
@@ -186,16 +233,17 @@ function textNodeToHTML(node, opts) {
       }
       html += `<li>${rendered}</li>`
     } else {
-      // plain text line
-      if (openList) {
-        // close list, start paragraph buffer anew
-        closeListIfAny()
-      }
-      if (opts.paras === 'p') {
+      if (openList) closeListIfAny()
+
+      if (opts.p) {
+        // collect lines for the current paragraph, we’ll wrap at blank line or end
         paragraphBuffer.push(rendered)
-      } else {
-        // 'br' mode: emit directly with <br>
+      } else if (opts.br) {
+        // stream directly with <br> (only when p=false)
         if (html && !html.endsWith("\n") && html !== "") html += "<br>"
+        html += rendered
+      } else {
+        // neither p nor br: just append
         html += rendered
       }
     }
@@ -203,7 +251,8 @@ function textNodeToHTML(node, opts) {
 
   // flush tail
   if (openList) closeListIfAny()
-  if (opts.paras === 'p') flushParagraph()
+  if (opts.p) flushParagraph()
+  if (opts.br) flushParagraph()
 
   return html
 }
@@ -286,16 +335,48 @@ function groupCardsByFont(cards) {
   return groups
 }
 
+function getSelectedTextNodes() {
+  const selected = figma.currentPage.selection
+  const textInSelection = []
+  for (const node of selected) {
+    if (node.type === "TEXT") textInSelection.push(node)
+    if (typeof node.findAll === "function") {
+      for (const n of node.findAll(n => n.type === "TEXT")) textInSelection.push(n)
+    }
+  }
+  const map = new Map()
+  for (const n of textInSelection) map.set(n.id, n)
+  return Array.from(map.values())
+}
+
+// Show UI
+figma.showUI(__html__, { width: 360, height: 660 })
+
+// ---- NEW: push selection info on load
+function postSelectionSnapshot() {
+  const textNodes = getSelectedTextNodes()
+  figma.ui.postMessage({
+    type: "selection",
+    selectedTextCount: textNodes.length,
+    totalSelectionCount: figma.currentPage.selection.length,
+  })
+}
+postSelectionSnapshot()
+
 // =====================
 //        UI
 // =====================
-figma.showUI(__html__, { width: 360, height: 660 })
+
+figma.on("selectionchange", () => {
+  postSelectionSnapshot()
+})
 
 figma.ui.onmessage = (msg) => {
   if (!msg) return
 
   if (msg.type === "extract") {
     const opts = normalizeOptions(msg.options || {})
+
     const nodes = getSelectedTextNodes()
     if (!nodes.length) {
       figma.ui.postMessage({
